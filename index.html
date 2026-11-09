@@ -53,16 +53,30 @@ function animation(){requestAnimationFrame(animation);if(!drag&&!handSeen)model.
 let stream=null,tracker=null,running=false,raf=null,prevPt=null,prevPinch=null,last=0;const video=el('#webcam');
 function stop(){running=false;handSeen=false;if(raf!==null)cancelAnimationFrame(raf);raf=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}video.pause();video.srcObject=null;tracker?.close?.();tracker=null;prevPt=null;prevPinch=null;el('#cursor').style.display='none';el('#gesture').textContent='غير مفعلة';el('#status').textContent='الكاميرا متوقفة وتم إيقاف بث الفيديو.'}
 el('#stop').onclick=stop;
-async function start(){stop();el('#status').textContent='جاري تحميل نظام تتبع اليد...';try{
-if(!navigator.mediaDevices?.getUserMedia)throw Error('يلزم HTTPS أو localhost');
-const sources=['https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm','https://esm.sh/@mediapipe/tasks-vision@0.10.22'];
-let MP=null,err=null;for(let s of sources){try{MP=await import(s);break}catch(e){err=e}}if(!MP)throw err;
+async function start(){
+stop();
+if(!navigator.mediaDevices?.getUserMedia){el('#status').textContent='يرجى فتح الموقع عبر HTTPS والسماح بالكاميرا.';return}
+try{
+stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{width:{ideal:640},height:{ideal:480},facingMode:'user'}});
+video.srcObject=stream;await video.play();
+el('#status').textContent='الكاميرا تعمل ✓ — جارٍ تهيئة تتبع اليد...';
+}catch(e){stop();el('#status').textContent='تعذر فتح الكاميرا: '+(e.name||e.message)+' — تحقق من إذن المتصفح أو أغلق التطبيقات الأخرى.';return}
+try{
+const sources=[
+'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/vision_bundle.mjs',
+'https://unpkg.com/@mediapipe/tasks-vision@0.10.22/vision_bundle.mjs'
+];
+let MP=null;
+for(const url of sources){try{MP=await import(url);if(MP.FilesetResolver&&MP.HandLandmarker)break;MP=null}catch(e){console.warn('MediaPipe source unavailable',url,e)}}
+if(!MP)throw new Error('تعذر الوصول إلى ملفات MediaPipe عبر شبكتك');
 const wasm='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm';
 const files=await MP.FilesetResolver.forVisionTasks(wasm);
-const o={baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',delegate:'GPU'},runningMode:'VIDEO',numHands:1};
-try{tracker=await MP.HandLandmarker.createFromOptions(files,o)}catch(e){o.baseOptions.delegate='CPU';tracker=await MP.HandLandmarker.createFromOptions(files,o)}
-stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{width:{ideal:640},height:{ideal:480},facingMode:'user'}});video.srcObject=stream;await video.play();running=true;el('#status').textContent='الكاميرا تعمل. ارفع يدك أمام العدسة.';tick();
-}catch(e){stop();el('#status').textContent='تعذر تشغيل تتبع اليد: '+(e.message||e)+' . تحقق من الإنترنت وأذونات الكاميرا.'}}
+const opts={baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',delegate:'GPU'},runningMode:'VIDEO',numHands:1};
+try{tracker=await MP.HandLandmarker.createFromOptions(files,opts)}catch(e){opts.baseOptions.delegate='CPU';tracker=await MP.HandLandmarker.createFromOptions(files,opts)}
+if(!stream?.active){tracker?.close?.();tracker=null;return}
+running=true;el('#status').textContent='الكاميرا وتتبع اليد يعملان ✓';tick();
+}catch(e){el('#status').textContent='الكاميرا تعمل ✓ لكن تتبع اليد لم يبدأ: '+(e.message||e)+' . جرّب شبكة أخرى أو اسمح بمصادر المكتبة.';el('#gesture').textContent='الماوس متاح';}
+}
 el('#start').onclick=start;
 function tick(){if(!running)return;const t=performance.now();if(video.readyState>=2&&t-last>50){last=t;try{const res=tracker.detectForVideo(video,t),p=res.landmarks?.[0];if(p){handSeen=true;const index=p[8],thumb=p[4],wrist=p[0];const ratio=Math.hypot(index.x-thumb.x,index.y-thumb.y)/(Math.hypot(p[5].x-p[17].x,p[5].y-p[17].y)||.16);let open=[8,12,16,20].filter((id,i)=>Math.hypot(p[id].x-wrist.x,p[id].y-wrist.y)>Math.hypot(p[[6,10,14,18][i]].x-wrist.x,p[[6,10,14,18][i]].y-wrist.y)*1.1).length>=4;el('#gesture').textContent=open?'كف مفتوح / تثبيت':ratio<.32?'ضم الأصابع / تكبير':'تحريك / تدوير';el('#status').textContent='تم اكتشاف اليد: التحليل داخل المتصفح';let rect=view.getBoundingClientRect(),ptr=el('#cursor');ptr.style.display='block';ptr.style.left=rect.left+(1-index.x)*rect.width+'px';ptr.style.top=rect.top+index.y*rect.height+'px';if(!open){if(prevPt){model.rotation.y+=(prevPt.x-index.x)*2;model.rotation.x+=(index.y-prevPt.y)*1.4}if(prevPinch!==null&&ratio<1.2){zoom=Math.max(4.4,Math.min(19,zoom+(prevPinch-ratio)*5));camera.position.z=zoom}}prevPt={x:index.x,y:index.y};prevPinch=ratio}else{handSeen=false;prevPt=null;prevPinch=null;el('#cursor').style.display='none';el('#gesture').textContent='لم تُكتشف يد'}}catch(e){el('#status').textContent='خطأ في التحليل: '+e.message}}raf=requestAnimationFrame(tick)}
 addEventListener('pagehide',stop);addEventListener('beforeunload',stop);document.addEventListener('visibilitychange',()=>{if(document.hidden&&running)stop()});
