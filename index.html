@@ -63,14 +63,21 @@ el('#status').textContent='الكاميرا تعمل ✓ — جارٍ تهيئة
 }catch(e){stop();el('#status').textContent='تعذر فتح الكاميرا: '+(e.name||e.message)+' — تحقق من إذن المتصفح أو أغلق التطبيقات الأخرى.';return}
 try{
 const sources=[
-'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/vision_bundle.mjs',
-'https://unpkg.com/@mediapipe/tasks-vision@0.10.21/vision_bundle.mjs'
+{js:'https://esm.sh/@mediapipe/tasks-vision@0.10.14',wasm:'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'},
+{js:'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs',wasm:'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'},
+{js:'https://unpkg.com/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs',wasm:'https://unpkg.com/@mediapipe/tasks-vision@0.10.14/wasm'}
 ];
-let MP=null;
-for(const url of sources){try{MP=await import(url);if(MP.FilesetResolver&&MP.HandLandmarker)break;MP=null}catch(e){console.warn('MediaPipe source unavailable',url,e)}}
-if(!MP)throw new Error('تعذر الوصول إلى ملفات MediaPipe عبر شبكتك');
-const wasm='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/wasm';
-const files=await MP.FilesetResolver.forVisionTasks(wasm);
+let MP=null,files=null,loadErrors=[];
+for(const source of sources){
+ try{
+  const imported=await import(source.js);
+  const candidate=imported.FilesetResolver?imported:(imported.default||{});
+  if(!candidate.FilesetResolver||!candidate.HandLandmarker)throw Error('Missing named exports');
+  files=await candidate.FilesetResolver.forVisionTasks(source.wasm);
+  MP=candidate;break;
+ }catch(e){loadErrors.push(source.js+': '+e.message);console.warn('MediaPipe source unavailable',source.js,e)}
+}
+if(!MP)throw new Error('تعذر تحميل ملفات التشغيل. افتح صفحة التشخيص وأرسل التقرير. '+loadErrors.map(x=>x.split(': ')[1]).join(' | '));
 const opts={baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',delegate:'GPU'},runningMode:'VIDEO',numHands:1};
 try{tracker=await MP.HandLandmarker.createFromOptions(files,opts)}catch(e){opts.baseOptions.delegate='CPU';tracker=await MP.HandLandmarker.createFromOptions(files,opts)}
 if(!stream?.active){tracker?.close?.();tracker=null;return}
