@@ -63,13 +63,13 @@ el('#status').textContent='الكاميرا تعمل ✓ — جارٍ تهيئة
 }catch(e){stop();el('#status').textContent='تعذر فتح الكاميرا: '+(e.name||e.message)+' — تحقق من إذن المتصفح أو أغلق التطبيقات الأخرى.';return}
 try{
 const sources=[
-'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/vision_bundle.mjs',
-'https://unpkg.com/@mediapipe/tasks-vision@0.10.22/vision_bundle.mjs'
+'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/vision_bundle.mjs',
+'https://unpkg.com/@mediapipe/tasks-vision@0.10.21/vision_bundle.mjs'
 ];
 let MP=null;
 for(const url of sources){try{MP=await import(url);if(MP.FilesetResolver&&MP.HandLandmarker)break;MP=null}catch(e){console.warn('MediaPipe source unavailable',url,e)}}
 if(!MP)throw new Error('تعذر الوصول إلى ملفات MediaPipe عبر شبكتك');
-const wasm='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm';
+const wasm='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/wasm';
 const files=await MP.FilesetResolver.forVisionTasks(wasm);
 const opts={baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',delegate:'GPU'},runningMode:'VIDEO',numHands:1};
 try{tracker=await MP.HandLandmarker.createFromOptions(files,opts)}catch(e){opts.baseOptions.delegate='CPU';tracker=await MP.HandLandmarker.createFromOptions(files,opts)}
